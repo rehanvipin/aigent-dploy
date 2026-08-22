@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+  <title>Aigent-Dploy Platform</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 1100px; color: #222; }
+    h1 { margin-bottom: 0.2rem; }
+    .sub { color: #666; margin-top: 0; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0 2rem; }
+    th, td { border: 1px solid #ddd; padding: 0.4rem 0.6rem; text-align: left; font-size: 0.9rem; }
+    th { background: #f5f5f5; }
+    .status { font-weight: 600; border-radius: 4px; padding: 0.1rem 0.4rem; font-size: 0.8rem; }
+    .pending, .waiting { background: #e8f0fe; color: #1a56db; }
+    .escalated { background: #fef3c7; color: #b45309; }
+    .done { background: #d1fae5; color: #047857; }
+    .failed { background: #fee2e2; color: #b91c1c; }
+    .card { border: 1px solid #fbbf24; background: #fffbeb; border-radius: 6px; padding: 0.8rem 1rem; margin-bottom: 0.6rem; }
+    nav a { margin-right: 1rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">Platform dashboard</a>
+    <a href="/cms/board">CMS task board (stub)</a>
+  </nav>
+  {% block content %}{% endblock %}
+</body>
+</html>

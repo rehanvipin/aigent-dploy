@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>CMS task board (stub — stands in for Filevine)</h1>
+<p class="sub">Tag {{ agent_handle }} in a task chat to trigger an agent run.</p>
+<table>
+  <tr><th>Task</th><th>Case</th><th>Firm</th><th>Status</th><th>Notes</th></tr>
+  {% for t in tasks %}
+  <tr>
+    <td><a href="/cms/board/tasks/{{ t.id }}">#{{ t.id }} — {{ t.title }}</a></td>
+    <td>{{ t.case.case_number }} ({{ t.case.client_name }})</td>
+    <td>{{ t.case.firm.name }}</td>
+    <td><span class="status {{ 'done' if t.status == 'done' else 'waiting' }}">{{ t.status }}</span></td>
+    <td><pre style="margin:0">{{ t.notes }}</pre></td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

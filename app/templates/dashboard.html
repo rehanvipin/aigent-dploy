@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Platform dashboard</h1>
+<p class="sub">What the agents are doing across all firms (shared infra, firm-scoped data).</p>
+
+<h2>Open escalations — need a human</h2>
+{% if escalations %}
+  {% for e in escalations %}
+  <div class="card">
+    <strong>Escalation #{{ e.id }}</strong> (run <a href="/runs/{{ e.run_id }}">#{{ e.run_id }}</a>,
+    case {{ cases_by_id.get(e.case_id, {}).get('case_number', e.case_id) }})
+    <p><strong>Question:</strong> {{ e.question }}</p>
+    {% if e.context %}<pre>{{ e.context }}</pre>{% endif %}
+    <form method="post" action="/ui/escalations/{{ e.id }}/answer">
+      <input name="answer" placeholder="Type the answer for the agent..." size="60" required>
+      <button type="submit">Answer &amp; resume agent</button>
+    </form>
+  </div>
+  {% endfor %}
+{% else %}
+  <p>Nothing waiting on a human. ✅</p>
+{% endif %}
+
+<h2>Agent runs</h2>
+<table>
+  <tr><th>Run</th><th>Firm</th><th>Case</th><th>Task</th><th>Agent</th><th>Status</th><th>Attempts</th><th>Next wake</th><th>Goal</th></tr>
+  {% for r in runs %}
+  <tr>
+    <td><a href="/runs/{{ r.id }}">#{{ r.id }}</a></td>
+    <td>{{ r.firm_id }}</td>
+    <td>{{ cases_by_id.get(r.case_id, {}).get('case_number', r.case_id) }}</td>
+    <td>#{{ r.task_id }}</td>
+    <td>{{ r.agent_name }}</td>
+    <td><span class="status {{ r.status.value }}">{{ r.status.value }}</span></td>
+    <td>{{ r.attempt }}</td>
+    <td>{{ r.next_run_at.strftime('%Y-%m-%d %H:%M') if r.next_run_at else '—' }}</td>
+    <td>{{ r.goal[:80] }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

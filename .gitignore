@@ -1,0 +1,4 @@
+app/__pycache__
+app/agents/__pycache__
+app/platform/__pycache__
+app/stubs/__pycache__

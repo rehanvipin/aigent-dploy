@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Task #{{ task.id }} — {{ task.title }}</h1>
+<p class="sub">
+  Case {{ case.case_number }} ({{ case.client_name }}) ·
+  <span class="status {{ 'done' if task.status == 'done' else 'waiting' }}">{{ task.status }}</span>
+</p>
+{% if task.notes %}<h3>Notes</h3><pre>{{ task.notes }}</pre>{% endif %}
+
+<h3>Task chat</h3>
+<table>
+  {% for m in messages %}
+  <tr>
+    <td><strong>{{ m.author }}</strong></td>
+    <td>{{ m.body }}</td>
+    <td>{{ m.created_at.strftime('%H:%M:%S') }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<form method="post" action="/ui/tasks/{{ task.id }}/message">
+  <input name="body" size="80" placeholder="Message... mention {{ agent_handle }} to trigger the agent" required>
+  <button type="submit">Send</button>
+</form>
+{% endblock %}
