@@ -192,6 +192,18 @@ def _register():
             lambda t, ctx, a: t.cms_write_task(ctx.run.task_id,
                                               status=a.get("status"), note=a["note"]),
         ),
+        "cms_create_task": _spec(
+            "cms_create_task",
+            "Create a new task in the CMS for staff attention (e.g. a client concern).",
+            {
+                "title": {"type": "string", "description": "task title"},
+                "notes": {"type": "string", "description": "context / reason the task is needed"},
+            },
+            ["title", "notes"],
+            lambda t, ctx, a: t.cms_create_task(
+                ctx.case.get("id"), a["title"], a.get("notes", "")
+            ),
+        ),
         "voice_call": _spec(
             "voice_call",
             "Place a phone call and hold a conversation. Returns an outcome and a transcript.",

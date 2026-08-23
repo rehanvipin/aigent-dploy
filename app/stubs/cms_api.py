@@ -36,6 +36,12 @@ class TaskUpdateIn(BaseModel):
     notes: str | None = None
 
 
+class TaskCreateIn(BaseModel):
+    title: str
+    notes: str = ""
+    status: str = "open"
+
+
 # ---------- helpers ----------
 
 def _get_or_create_thread(db: Session, task_id: int) -> ChatThread:
@@ -147,6 +153,18 @@ def update_task(task_id: int, body: TaskUpdateIn, db: Session = Depends(get_db))
         task.notes = (task.notes + "\n" + body.notes).strip() if task.notes else body.notes
     db.commit()
     return {"id": task.id, "status": task.status, "notes": task.notes}
+
+
+@router.post("/api/cases/{case_id}/tasks")
+def create_task(case_id: int, body: TaskCreateIn, db: Session = Depends(get_db)):
+    case = db.get(Case, case_id)
+    if not case:
+        raise HTTPException(404, "case not found")
+    task = Task(case_id=case_id, title=body.title, status=body.status, notes=body.notes)
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return {"id": task.id, "case_id": task.case_id, "title": task.title, "status": task.status, "notes": task.notes}
 
 
 @router.post("/api/tasks/{task_id}/messages")

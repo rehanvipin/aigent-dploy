@@ -82,6 +82,14 @@ class Toolset:
         self._log("tool_call", f"posted to CMS chat on task #{task_id}: {body!r}", result)
         return result
 
+    def cms_create_task(self, case_id: int, title: str, notes: str = "") -> dict:
+        result = _post(
+            f"{settings.cms_base_url}/cms/api/cases/{case_id}/tasks",
+            {"title": title, "notes": notes, "status": "open"},
+        )
+        self._log("tool_call", f"created CMS task on case #{case_id}: {title!r}", result)
+        return result
+
     # -- comms --------------------------------------------------------
 
     def voice_call(self, to: str, purpose: str, scenario: str | None = None) -> dict:
@@ -130,7 +138,8 @@ class Toolset:
         )
         return result
 
-    def send_email(self, to: str, subject: str, body: str, scenario: str = "default") -> dict:
+    def send_email(self, to: str, subject: str, body: str, scenario: str | None = None) -> dict:
+        scenario = scenario or f"email:{to}"
         result = _post(
             f"{settings.email_stub_url}/send",
             {

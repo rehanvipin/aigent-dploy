@@ -69,7 +69,9 @@ def main() -> None:
               title="Get medical records from Metro General Hospital (ER visit 2026-05-30)")
     t2 = Task(case_id=case.id,
               title="Get billing records from County Records Bureau")
-    db.add_all([t1, t2])
+    t3 = Task(case_id=case.id,
+              title="Client wellness check-in — Maria Santos")
+    db.add_all([t1, t2, t3])
     db.commit()
 
     # scripted stub behaviour -------------------------------------------------
@@ -102,6 +104,17 @@ def main() -> None:
                 ("default", json.dumps([
                     {"outcome": "no_answer", "spoken": ""},
                 ])),
+                # client check-in: Maria answers the phone, shares an update + concern
+                ("provider:+1-555-0142", json.dumps([
+                    {"outcome": "answered", "spoken": "Hi, I'm doing okay. PT is helping a little, but my back still hurts at night."},
+                    {"outcome": "answered", "spoken": "I'm worried because I still can't work, and I haven't heard anything about my case."},
+                    {"outcome": "no_answer", "spoken": ""},
+                ])),
+                # client check-in over email (fallback channel)
+                ("email:maria.santos@example.com", json.dumps([
+                    {"outcome": "sent", "spoken": "Hi, doing okay. PT twice a week. When will my case settle?"},
+                    {"outcome": "sent", "spoken": "No change, still waiting to hear about my case."},
+                ])),
             ],
         )
         conn.commit()
@@ -109,6 +122,7 @@ def main() -> None:
     print(f"seeded firm #{firm.id} '{firm.name}', case #{case.id} '{case.case_number}'")
     print(f"  task #{t1.id}: {t1.title}   (happy path)")
     print(f"  task #{t2.id}: {t2.title}   (escalation path)")
+    print(f"  task #{t3.id}: {t3.title}   (client check-in)")
     print()
     print("try:")
     print(f"  curl -s -X POST {BASE}/cms/api/tasks/{t1.id}/messages \\")
