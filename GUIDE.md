@@ -5,7 +5,7 @@ together. The project is a **proof-of-concept** for a platform that makes
 building new "workflow agents" cheap. One process runs the whole system end to
 end: stub services, the agent platform, and a dashboard.
 
-> For the *why* and the ideal production design, read `README.md` and
+> For the *why* and the ideal production design, read `BACKGROUND.md` and
 > `PLATFORM.md`. This guide focuses on the *code as it exists*.
 
 ---
@@ -494,7 +494,7 @@ the exact event sequence.
 
 ## 13. Reading order (suggested)
 
-1. `README.md` — domain context and the two demo paths.
+1. `BACKGROUND.md` — domain context and the two demo paths.
 2. `app/platform/models.py` — the state model (runs, events, escalations).
 3. `app/platform/agent_base.py` — the agent contract (small).
 4. `app/agents/medical_records.py` — the reference agent's instructions + tools.

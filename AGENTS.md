@@ -1,8 +1,9 @@
 # AGENTS.md
 
 Operational notes for coding agents working in this repository. Project
-context and architecture live in README.md and PLATFORM.md; this file is for
-how to build, run, and not step on rakes.
+context lives in BACKGROUND.md, ideal-state architecture in PLATFORM.md, and
+current implementation details in GUIDE.md; this file is for how to build, run,
+and not step on rakes.
 
 ## Build & run
 
