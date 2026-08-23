@@ -64,7 +64,7 @@ class CallIn(BaseModel):
     to: str = ""
     script_prompt: str = ""   # what the agent 'says' it wants
     firm_id: int = 0
-    case_id: int = 0
+    case_ref: str = ""
 
 
 @router.post("/voice/call")
@@ -92,7 +92,8 @@ class EmailIn(BaseModel):
     subject: str = ""
     body: str = ""
     firm_id: int = 0
-    case_id: int = 0
+    case_ref: str = ""
+    conversation_key: str = ""
 
 
 @router.post("/email/send")
@@ -103,9 +104,43 @@ def send_email(body: EmailIn):
         "reply": turn.get("spoken", ""),
         "outcome": turn.get("outcome", "sent"),
         "structured": turn.get("structured", {}),
+        "conversation_key": body.conversation_key,
     }
     logged = _log("email", {**body.model_dump(), "result": result})
     return {"email_id": logged["id"], **result}
+
+
+class InboundEmailIn(BaseModel):
+    """Simulate the outside world: an email arrives for the platform (a staff
+    answer by email, or a provider's reply to the agent's email). The stub
+    forwards it to the platform's inbound-email webhook, echoing the
+    conversation_key the agent's outbound email minted."""
+    firm_id: int
+    sender: str
+    subject: str = ""
+    body: str
+    conversation_key: str = ""
+    case_ref: str | None = None
+    task_ref: str | None = None
+    forward: bool = True     # False = just log it (dashboard form posts with True)
+
+
+@router.post("/email/inbound")
+def inbound_email(body: InboundEmailIn):
+    logged = _log("email_inbound", body.model_dump())
+    routed: dict = {"forwarded": False}
+    if body.forward:
+        import httpx
+        try:
+            resp = httpx.post(
+                f"{settings.cms_base_url}/api/webhooks/inbound-email",
+                json=body.model_dump(exclude={"forward"}),
+                timeout=15,
+            )
+            routed = {"forwarded": True, "platform": resp.json()}
+        except httpx.HTTPError as exc:
+            routed = {"forwarded": False, "error": str(exc)}
+    return {"inbound_id": logged["id"], **routed}
 
 
 # ---------- fax ----------
@@ -114,7 +149,8 @@ class FaxIn(BaseModel):
     to: str = ""
     document: str = ""
     firm_id: int = 0
-    case_id: int = 0
+    case_ref: str = ""
+    conversation_key: str = ""
 
 
 @router.post("/fax/send")

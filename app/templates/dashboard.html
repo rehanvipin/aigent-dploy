@@ -1,19 +1,29 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Platform dashboard</h1>
-<p class="sub">What the agents are doing across all firms (shared infra, firm-scoped data).</p>
+<p class="sub">Goals, runs, guardrails, and memory — across all firms (shared infra, firm-scoped data).</p>
 
 <h2>Open escalations — need a human</h2>
 {% if escalations %}
   {% for e in escalations %}
   <div class="card">
-    <strong>Escalation #{{ e.id }}</strong> (run <a href="/runs/{{ e.run_id }}">#{{ e.run_id }}</a>,
-    case {{ cases_by_id.get(e.case_id, {}).get('case_number', e.case_id) }})
-    <p><strong>Question:</strong> {{ e.question }}</p>
+    <strong>Escalation #{{ e.id }}</strong> <span class="status escalated">{{ e.kind.value }}</span>
+    (run <a href="/runs/{{ e.run_id }}">#{{ e.run_id }}</a>,
+    case {{ cases_by_ref.get(e.case_ref, {}).get('case_number', e.case_ref) }})
+    <p><strong>{% if e.kind.value == 'task' %}Work requested:{% else %}Question:{% endif %}</strong> {{ e.question }}</p>
     {% if e.context %}<pre>{{ e.context }}</pre>{% endif %}
     <form method="post" action="/ui/escalations/{{ e.id }}/answer">
-      <input name="answer" placeholder="Type the answer for the agent..." size="60" required>
-      <button type="submit">Answer &amp; resume agent</button>
+      <input name="answer" placeholder="{% if e.kind.value == 'task' %}Done — note for the agent...{% else %}Type the answer for the agent...{% endif %}" size="60" required>
+      <button type="submit">Resolve &amp; resume agent</button>
+    </form>
+    <p class="sub">…or reply in the CMS chat, or by email (simulate below).</p>
+    <form method="post" action="/ui/simulate-inbound-email">
+      <input type="hidden" name="firm_id" value="{{ e.firm_id }}">
+      <input type="hidden" name="sender" value="staff@firm.example.com">
+      <input type="hidden" name="subject" value="Re: escalation #{{ e.id }}">
+      <input type="hidden" name="task_ref" value="{{ e.task_ref or '' }}">
+      <input name="body" placeholder="Simulate a staff email reply..." size="60">
+      <button type="submit">Send as inbound email</button>
     </form>
   </div>
   {% endfor %}
@@ -21,21 +31,55 @@
   <p>Nothing waiting on a human. ✅</p>
 {% endif %}
 
+<h2>Goals</h2>
+<table>
+  <tr><th>Goal</th><th>Firm</th><th>Case</th><th>Agent</th><th>Horizon</th><th>Status</th><th>Runs</th><th>Brief</th></tr>
+  {% for g in goals %}
+  <tr>
+    <td>#{{ g.id }}</td>
+    <td>{{ g.firm_id }}</td>
+    <td>{{ cases_by_ref.get(g.case_ref, {}).get('case_number', g.case_ref) }}</td>
+    <td>{{ g.agent_name }}</td>
+    <td>{{ g.horizon.value }}</td>
+    <td><span class="status {{ g.status.value }}">{{ g.status.value }}</span></td>
+    <td>{{ g.runs | length }}</td>
+    <td>{{ g.brief[:80] }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
 <h2>Agent runs</h2>
 <table>
-  <tr><th>Run</th><th>Firm</th><th>Case</th><th>Task</th><th>Agent</th><th>Status</th><th>Attempts</th><th>Next wake</th><th>Goal</th></tr>
+  <tr><th>Run</th><th>Goal</th><th>Firm</th><th>Case</th><th>Task</th><th>Agent</th><th>Status</th><th>Attempts</th><th>Next wake</th><th>Brief</th></tr>
   {% for r in runs %}
   <tr>
     <td><a href="/runs/{{ r.id }}">#{{ r.id }}</a></td>
+    <td>{{ r.goal_id or '—' }}</td>
     <td>{{ r.firm_id }}</td>
-    <td>{{ cases_by_id.get(r.case_id, {}).get('case_number', r.case_id) }}</td>
-    <td>#{{ r.task_id }}</td>
+    <td>{{ cases_by_ref.get(r.case_ref, {}).get('case_number', r.case_ref) }}</td>
+    <td>{{ r.task_ref or '—' }}</td>
     <td>{{ r.agent_name }}</td>
     <td><span class="status {{ r.status.value }}">{{ r.status.value }}</span></td>
     <td>{{ r.attempt }}</td>
     <td>{{ r.next_run_at.strftime('%Y-%m-%d %H:%M') if r.next_run_at else '—' }}</td>
-    <td>{{ r.goal[:80] }}</td>
+    <td>{{ r.goal[:60] }}</td>
   </tr>
+  {% endfor %}
+</table>
+
+<h2>Recent communications (agent memory)</h2>
+<table>
+  <tr><th>When</th><th>Channel</th><th>Dir</th><th>With</th><th>Summary</th></tr>
+  {% for c in comms %}
+  <tr>
+    <td>{{ c.occurred_at.strftime('%m-%d %H:%M') }}</td>
+    <td>{{ c.channel }}</td>
+    <td>{{ c.direction }}</td>
+    <td>{{ c.counterparty }}</td>
+    <td>{{ c.summary[:90] }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5">No archived communications yet.</td></tr>
   {% endfor %}
 </table>
 {% endblock %}

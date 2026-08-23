@@ -2,12 +2,12 @@
 {% block content %}
 <h1>Run #{{ run.id }} — {{ run.agent_name }}</h1>
 <p class="sub">
-  Firm {{ run.firm_id }} · Case {% if case %}{{ case.case_number }} ({{ case.client_name }}){% else %}{{ run.case_id }}{% endif %}
-  · Task #{{ run.task_id }} ·
+  Firm {{ run.firm_id }} · Case {% if case %}{{ case.case_number }} ({{ case.client_name }}){% else %}{{ run.case_ref }}{% endif %}
+  · Task {{ run.task_ref or '—' }} · Goal #{{ run.goal_id or '—' }} ·
   <span class="status {{ run.status.value }}">{{ run.status.value }}</span>
   · attempt {{ run.attempt }}
 </p>
-<p><strong>Goal:</strong> {{ run.goal }}</p>
+<p><strong>Brief:</strong> {{ run.goal }}</p>
 {% if run.status.value in ('pending', 'waiting') %}
 <form method="post" action="/ui/runs/{{ run.id }}/run-now">
   <button type="submit">Run next step now</button>
@@ -20,17 +20,28 @@
   {% for e in run.events %}
   <tr>
     <td>{{ e.created_at.strftime('%H:%M:%S') }}</td>
-    <td>{{ e.kind }}</td>
+    <td>{% if e.kind == 'guardrail' and 'BLOCK' in e.summary %}<strong class="status escalated">{{ e.kind }}</strong>{% else %}{{ e.kind }}{% endif %}</td>
     <td>{{ e.summary }}</td>
     <td>{% if e.detail %}<details><summary>view</summary><pre>{{ e.detail }}</pre></details>{% endif %}</td>
   </tr>
   {% endfor %}
 </table>
 
+<h2>Communications on this run</h2>
+{% for c in comms %}
+  <div class="card">
+    <strong>{{ c.channel }}</strong> {{ c.direction }} with {{ c.counterparty }}
+    <p>{{ c.summary }}</p>
+    {% if c.content %}<details><summary>content</summary><pre>{{ c.content }}</pre></details>{% endif %}
+  </div>
+{% else %}
+  <p>None.</p>
+{% endfor %}
+
 <h2>Escalations</h2>
 {% for esc in run.escalations %}
   <div class="card">
-    <strong>#{{ esc.id }} — {{ esc.status.value }}</strong>
+    <strong>#{{ esc.id }} — {{ esc.kind.value }} — {{ esc.status.value }}</strong>
     <p>{{ esc.question }}</p>
     {% if esc.answer %}<p><strong>Staff answer:</strong> {{ esc.answer }}</p>{% endif %}
   </div>

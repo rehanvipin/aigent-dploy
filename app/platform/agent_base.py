@@ -29,15 +29,17 @@ class StepResult:
     wait_days: float = 1.0          # for action="wait": when to wake again
     escalation_question: str = ""   # for action="escalate"
     escalation_context: str = ""
+    escalation_kind: str = "question"  # "question" (answer it) | "task" (a human must do work)
 
 
 @dataclass
 class RunContext:
     """Everything an agent needs for one invocation."""
     run: AgentRun
-    case: dict                      # fetched live from the CMS
-    task: dict
+    case: dict                      # fetched live through the firm's CMS connector
+    task: dict                      # {} for CMSs without a task subconcept
     tools: tools.Toolset
+    skills: list[str] = field(default_factory=list)   # skill keys the config allows
 
     @property
     def scratchpad(self) -> dict:

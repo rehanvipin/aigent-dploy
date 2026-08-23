@@ -1,12 +1,21 @@
-"""Seed the POC demo: one firm, one PI case, a records task, scripted stubs.
+"""Seed the POC demo: one firm, one PI case, goals' triggers, scripted stubs.
+
+Platform setup (the new architecture, as data):
+  - a PlatformFirm bound to the stub-CMS connector,
+  - per-firm agent configs: @records-agent (guardrail on, portal skill
+    attached) and @checkin-agent (org-chart skill attached),
+  - standing triggers: a staff chat message containing a handle opens a goal
+    for that agent (replaces the old hardcoded webhook agent).
 
 Scenarios:
   - "Metro General Hospital" releases records on the second portal check
-    -> happy path: tag agent, it requests via portal, follows up by phone,
-       records get released, task closes.
+    -> happy path: tag agent, it loads the portal skill, requests via portal,
+       follows up by phone, records get released, task closes.
   - "County Records Bureau" demands payment on the first call
-    -> escalation path: agent parks, staff answers in dashboard or CMS chat,
-       agent resumes.
+    -> escalation path (kind=task: a human must pay): answer in the dashboard,
+       the CMS chat, or by simulated inbound email; agent resumes.
+  - "Client wellness check-in" -> case-scoped long-horizon goal via
+    @checkin-agent (org-chart skill visible in its context).
 
 Run with the server up:  uv run python scripts/seed.py
 """
@@ -16,8 +25,6 @@ from __future__ import annotations
 import json
 import sqlite3
 import sys
-
-import httpx
 
 BASE = "http://localhost:8000"
 
@@ -29,6 +36,7 @@ def main() -> None:
     from app.config import settings
     from app.main import init_db  # creates tables if the server hasn't yet
     from app.platform.db import SessionLocal
+    from app.platform.models import AgentConfig, PlatformFirm, Trigger
     from app.stubs.cms_models import Case, Contact, Firm, Task
 
     init_db()
@@ -41,6 +49,54 @@ def main() -> None:
     firm = Firm(name="Doe & Associates Injury Law")
     db.add(firm)
     db.flush()
+
+    # platform-side firm binding (connector + per-firm agent configs) ---------
+    pfirm = PlatformFirm(
+        id=firm.id, name=firm.name, connector_key="stub_cms",
+        cms_firm_ref=str(firm.id), config_json="{}",
+    )
+    db.add(pfirm)
+    db.flush()
+
+    records_cfg = AgentConfig(
+        firm_id=pfirm.id, agent_name="medical-record-agent", handle="@records-agent",
+        skills_json=json.dumps([
+            "metro-general-portal",
+            "stub-cms-basics",
+            "trauma-records-request",
+            "firms/doe-and-associates/org-chart",
+        ]),
+        guardrail_focus=(
+            "Do not commit the firm to payments, settlement figures, or dates. "
+            "Verify the provider/recipient matches the case contacts before any "
+            "outbound call or email. Never share client medical details with a "
+            "third party. Do not invent case facts. Judge actions against the "
+            "tool's real arguments — do not demand identifiers the tool cannot "
+            "take. Escalations and internal staff notes are low risk: allow them."
+        ),
+    )
+    checkin_cfg = AgentConfig(
+        firm_id=pfirm.id, agent_name="client-checkin-agent", handle="@checkin-agent",
+        skills_json=json.dumps(["stub-cms-basics", "firms/doe-and-associates/org-chart"]),
+        guardrail_focus=(
+            "Client-facing: be warm, never clinical. Never promise settlement "
+            "amounts or dates, never give legal advice. If the client asks for "
+            "a human, redirect per the org chart (Sam Reyes), don't improvise."
+        ),
+        cadence_days=14.0,
+    )
+    db.add_all([records_cfg, checkin_cfg])
+    db.flush()
+
+    # standing triggers: staff tags an agent handle in the CMS task chat ------
+    db.add_all([
+        Trigger(firm_id=pfirm.id, agent_config_id=records_cfg.id,
+                event_type="staff_message",
+                match_json=json.dumps({"handle": "@records-agent"}), enabled=True),
+        Trigger(firm_id=pfirm.id, agent_config_id=checkin_cfg.id,
+                event_type="staff_message",
+                match_json=json.dumps({"handle": "@checkin-agent"}), enabled=True),
+    ])
 
     case = Case(
         firm_id=firm.id,
@@ -120,14 +176,16 @@ def main() -> None:
         conn.commit()
 
     print(f"seeded firm #{firm.id} '{firm.name}', case #{case.id} '{case.case_number}'")
+    print(f"  platform firm #{pfirm.id} bound to connector 'stub_cms'")
+    print(f"  agent configs: #{records_cfg.id} @records-agent (guardrail on, 4 skills), "
+          f"#{checkin_cfg.id} @checkin-agent (guardrail on, 2 skills)")
     print(f"  task #{t1.id}: {t1.title}   (happy path)")
     print(f"  task #{t2.id}: {t2.title}   (escalation path)")
     print(f"  task #{t3.id}: {t3.title}   (client check-in)")
     print()
     print("try:")
-    print(f"  curl -s -X POST {BASE}/cms/api/tasks/{t1.id}/messages \\")
-    print('       -H \'content-type: application/json\' \\')
-    print('       -d \'{"author":"staff","body":"@records-agent please follow up on this"}\'')
+    print(f"  uv run python -c \"import httpx; httpx.post('{BASE}/cms/api/tasks/{t1.id}/messages', "
+          f"json={{'author':'staff','body':'@records-agent please follow up on this'}})\"")
     print("  then watch http://localhost:8000/ and http://localhost:8000/cms/board")
 
 

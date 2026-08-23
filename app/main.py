@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS portal_requests (
     hipaa_on_file INTEGER NOT NULL DEFAULT 1,
     status TEXT NOT NULL DEFAULT 'submitted',
     firm_id INTEGER NOT NULL DEFAULT 0,
-    case_id INTEGER NOT NULL DEFAULT 0,
+    case_ref TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL
 );
 """
@@ -123,6 +123,23 @@ def ui_run_now(run_id: int):
     import httpx
     httpx.post(f"{settings.cms_base_url}/api/runs/{run_id}/run-now", timeout=15)
     return RedirectResponse(f"/runs/{run_id}", status_code=303)
+
+
+@app.post("/ui/simulate-inbound-email")
+def ui_simulate_inbound_email(firm_id: int = Form(...), sender: str = Form(...),
+                              subject: str = Form(""), body: str = Form(...),
+                              conversation_key: str = Form(""),
+                              task_ref: str = Form("")):
+    """Demo affordance: the outside world sends the platform an email."""
+    import httpx
+    httpx.post(
+        f"{settings.cms_base_url}/stubs/email/inbound",
+        json={"firm_id": firm_id, "sender": sender, "subject": subject,
+              "body": body, "conversation_key": conversation_key,
+              "task_ref": task_ref or None},
+        timeout=30,
+    )
+    return RedirectResponse("/", status_code=303)
 
 
 @app.get("/healthz")

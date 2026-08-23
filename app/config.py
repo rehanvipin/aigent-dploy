@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     portal_stub_url: str = "http://localhost:8000/stubs/portal"
     scheduler_interval_seconds: float = 2.0
 
+    # Skill library (progressive disclosure: index in context, bodies on demand)
+    skills_root: str = "skills"
+
     # Mistral (MISTRAL_API_KEY is read from the environment automatically)
     mistral_api_key: str = ""
     mistral_chat_model: str = "mistral-small-latest"

@@ -21,7 +21,14 @@ from app.stubs.cms_models import Case, ChatMessage, ChatThread, Contact, Firm, T
 router = APIRouter(prefix="/cms", tags=["cms"])
 templates = Jinja2Templates(directory="app/templates")
 
+# Display default for the task-board UI. Real routing is data-driven: the
+# platform matches standing triggers on whatever handle the firm's agent
+# config declares (see app/platform/triggers.py).
 AGENT_HANDLE = "@records-agent"
+
+
+def _mentions_agent(body: str) -> bool:
+    return any(part.startswith("@") for part in body.split())
 
 
 # ---------- schemas ----------
@@ -60,8 +67,8 @@ def _fire_agent_webhook(task: Task, thread: ChatThread, message: ChatMessage) ->
 
     payload = {
         "firm_id": task.case.firm_id,
-        "case_id": task.case_id,
-        "task_id": task.id,
+        "case_id": str(task.case_id),   # opaque refs on the platform side
+        "task_id": str(task.id),
         "thread_id": thread.id,
         "message": message.body,
         "author": message.author,
@@ -173,7 +180,7 @@ def post_message(task_id: int, body: MessageIn, db: Session = Depends(get_db)):
     if not task:
         raise HTTPException(404, "task not found")
     thread = _get_or_create_thread(db, task_id)
-    mentions = AGENT_HANDLE in body.body
+    mentions = _mentions_agent(body.body)
     msg = ChatMessage(thread_id=thread.id, author=body.author, body=body.body, mentions_agent=mentions)
     db.add(msg)
     db.commit()

@@ -20,12 +20,23 @@ and not step on rakes.
   `app.main.STUB_DDL`, not SQLAlchemy).
 - The LLM agent and voice path need `MISTRAL_API_KEY` in the environment.
   Without it, runs fail with a clear `MistralError` (no silent fallback).
+  The guardrail reviewer adds a second Mistral chat call per outward action,
+  so a free-tier key can hit 429 rate limits: the loop retries chat with
+  backoff and the guardrail fails open (audited as `guardrail UNAVAILABLE ...
+  executed unreviewed`), so a 429 shows up as an audited event, not a dead run.
+- Seeding creates a `platform_firms` row, two `agent_configs` (`@records-agent`
+  with guardrail + 4 skills, `@checkin-agent`), and two standing triggers;
+  skills live under `skills/`. Tagging a handle in CMS chat therefore opens a
+  GOAL and starts its first run via the trigger pipeline — the webhook has no
+  hardcoded agent anymore.
 - There are no tests; verification = `scripts/mistral_smoke.py` + the scripted
-  end-to-end demo (seed → tag `@records-agent` on tasks 1 & 2 → run-now /
-  answer escalation). Re-run it after touching runtime, tools, llm, or stub
-  code. The LLM is non-deterministic: the agent may take a different (still
-  valid) path through the tools; check the final status, not the exact event
-  sequence.
+  end-to-end demo: tag `@records-agent` on task 1 (happy path) and task 2
+  (escalation — answer via dashboard, CMS chat, or simulated inbound email),
+  and `@checkin-agent` on task 3 (case-scoped goal). Fresh-demo reset is
+  unchanged (`rm -f aigent-dploy.db`, restart, seed). Re-run it after touching
+  runtime, tools, llm, triggers, or stub code. The LLM is non-deterministic:
+  the agent may take a different (still valid) path through the tools; check
+  the final goal/run status, not the exact event sequence.
 
 ## Quirks learned the hard way
 
@@ -59,29 +70,55 @@ and not step on rakes.
   simultaneously (status was still `pending` in the scheduler's snapshot).
   `runtime.execute_run` guards with an in-process `_executing` set — keep
   that guard if you refactor.
-- **Escalation answers from CMS chat**: the CMS stub forwards *every* staff
-  message to the webhook, not just ones mentioning the agent; the platform
-  decides (answer open escalation > run already active > start new run).
-  If you change the trigger rule in `stubs/cms_api.py`, keep that ordering
-  in `platform/api.py::cms_chat_webhook` in mind.
+- **Trigger routing is centralized** in `app/platform/triggers.py::route_event`
+  — one pipeline for every inbound event (CMS chat, inbound email), in order:
+  open escalation on the work item > instance trigger (matched by
+  `conversation_key`) > already-running run > standing trigger (matched by
+  agent `@handle`) opens a new goal. If you change the trigger rule in
+  `stubs/cms_api.py` (what it forwards), keep that ordering in mind.
+- **ORM name collision**: `AgentRun.goal` is the brief *text* (a column); the
+  relationship to the `Goal` row is `goal_row`. Don't rename one to the other.
+- **Opaque refs, not ints**: `AgentRun.case_ref`/`task_ref` are opaque STRINGS
+  (the CMS's ids, whatever shape); `task_ref` can be NULL for CMSs without a
+  task subconcept or for case-scoped long-horizon goals. Don't cast them to int.
+- **Guardrail reviewer blindness** (known limitation): the reviewer sees the
+  snapshot context + the proposed action, but NOT other in-step tool results.
+  It can contradict a status the agent just learned seconds earlier, or
+  mis-classify an agent *reporting* a block as falsely claiming. Mitigations:
+  the reviewer is told to take terminal tool statuses at face value and
+  respect staff answers/chronology; agent instruction #9 tells it to escalate
+  rather than resubmit when the same action is blocked twice for the same
+  reason. A fuller fix (pass the in-step tool transcript to the reviewer) is a
+  follow-up.
 - **No `curl` in this environment** — use `uv run python -c "import httpx; ..."`
   or heredoc scripts for HTTP checks.
 
 ## Conventions
 
-- Tools never get case/firm/task ids as arguments from the agent — the
-  `Toolset` is constructed per-run and injects them (firm scoping, audit
-  trail). Same rule for the LLM: tool schemas in `llm.py::TOOL_SPECS` expose
-  only domain args; stub-internal keys (scenario, provider_key) are derived
+- Tools never get case/firm refs as arguments from the agent — the `Toolset`
+  is constructed per-run (with the firm's CMS connector) and injects
+  `case_ref`/`task_ref` (opaque strings) and firm scoping. Same rule for the
+  LLM: tool schemas in `llm.py::TOOL_SPECS` expose only domain args;
+  stub-internal keys (scenario, provider_key, conversation_key) are derived
   in the dispatcher. Don't expose them to the model.
-- Tool results are deliberately free-form in their payloads (the CMS changes
-  between firms); only the envelope (outcome / transcript / payload) is
-  normalized. Agent code must read, not assume.
+- CMS access goes through the firm's **connector** (`app/platform/connectors.py`),
+  not direct HTTP — the Toolset holds the connector resolved from the run's
+  firm. Adding a CMS = a new connector class + a matching skill, not platform
+  branches. Capability flags (`chat`, `tasks`) drive channel choice.
+- Skills are **knowledge, not configuration**: the tool allow-list is still
+  the capability boundary; a skill teaches the agent *how* to do allowed work.
+  Skills attach via the per-firm `agent_configs` row; bodies load on demand
+  through `load_skill` (progressive disclosure) and are audited.
+- Outbound comms mint a `conversation_key` (stored in the `communications`
+  archive) and an instance trigger, so inbound replies route back to the
+  owning run. The archive is firm-tagged and agent-only (not a mirror of CMS
+  chat); `search_conversations`/`read_conversation` are the memory tools.
 - An agent module contains only its declaration (name, tools, instructions,
   cadence) — decision logic lives in the LLM prompt, and the platform's
   `llm.py` drives it. A `step_fn` is still supported for deterministic
-  agents, but scheduling, persistence, audit, and escalation plumbing belong
-  to the platform — don't let them leak into `app/agents/`.
+  agents (but it bypasses the guardrail, which lives in the LLM tool loop),
+  and scheduling, persistence, audit, and escalation plumbing belong to the
+  platform — don't let them leak into `app/agents/`.
 - Scenario scripts in `scripts/seed.py` are keyed by provider phone
   (`provider:+1-...`, `portal:+1-...`); each check/call advances the script
   one step and sticks on the last entry.

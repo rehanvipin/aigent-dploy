@@ -33,7 +33,7 @@ class RecordsRequestIn(BaseModel):
     case_number: str
     hipaa_on_file: bool = True
     firm_id: int = 0
-    case_id: int = 0
+    case_ref: str = ""
 
 
 @router.post("/requests")
@@ -48,10 +48,10 @@ def submit_request(body: RecordsRequestIn):
             return {"request_id": existing["id"], "status": "already_open"}
         cur = conn.execute(
             """INSERT INTO portal_requests
-               (provider_key, client_name, case_number, hipaa_on_file, status, firm_id, case_id, created_at)
+               (provider_key, client_name, case_number, hipaa_on_file, status, firm_id, case_ref, created_at)
                VALUES (?, ?, ?, ?, 'submitted', ?, ?, ?)""",
             (body.provider_key, body.client_name, body.case_number, int(body.hipaa_on_file),
-             body.firm_id, body.case_id, now),
+             body.firm_id, body.case_ref, now),
         )
         conn.commit()
         return {"request_id": cur.lastrowid, "status": "submitted"}
