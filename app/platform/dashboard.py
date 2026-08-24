@@ -57,6 +57,19 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/goals/{goal_id}", response_class=HTMLResponse)
+def goal_detail(goal_id: int, request: Request, db: Session = Depends(get_db)):
+    goal = db.get(Goal, goal_id)
+    if not goal:
+        return HTMLResponse("goal not found", status_code=404)
+    case = _cms_json(f"/cases/{goal.case_ref}")
+    return templates.TemplateResponse(
+        request,
+        "goal_detail.html",
+        {"goal": goal, "case": case},
+    )
+
+
 @router.get("/runs/{run_id}", response_class=HTMLResponse)
 def run_detail(run_id: int, request: Request, db: Session = Depends(get_db)):
     run = db.get(AgentRun, run_id)

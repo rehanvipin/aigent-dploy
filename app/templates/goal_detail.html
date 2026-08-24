@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Goal #{{ goal.id }} — {{ goal.agent_name }}</h1>
+<p class="sub">
+  Firm {{ goal.firm_id }} · Case {% if case %}{{ case.case_number }} ({{ case.client_name }}){% else %}{{ goal.case_ref }}{% endif %}
+  · Task {{ goal.task_ref or '—' }} ·
+  <span class="status {{ goal.status.value }}">{{ goal.status.value }}</span>
+  · {{ goal.horizon.value }}-horizon
+</p>
+<p><strong>Brief:</strong> {{ goal.brief }}</p>
+{% if goal.closed_at %}<p>Closed at {{ goal.closed_at.strftime('%Y-%m-%d %H:%M') }}.</p>{% endif %}
+
+<h2>Runs for this goal</h2>
+<table>
+  <tr><th>Run</th><th>Status</th><th>Attempts</th><th>Created</th><th>Next wake</th></tr>
+  {% for r in goal.runs %}
+  <tr>
+    <td><a href="/runs/{{ r.id }}">#{{ r.id }}</a></td>
+    <td><span class="status {{ r.status.value }}">{{ r.status.value }}</span></td>
+    <td>{{ r.attempt }}</td>
+    <td>{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+    <td>{{ r.next_run_at.strftime('%Y-%m-%d %H:%M') if r.next_run_at else '—' }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="5">No runs yet for this goal.</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

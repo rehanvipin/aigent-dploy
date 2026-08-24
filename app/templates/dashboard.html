@@ -36,14 +36,14 @@
   <tr><th>Goal</th><th>Firm</th><th>Case</th><th>Agent</th><th>Horizon</th><th>Status</th><th>Runs</th><th>Brief</th></tr>
   {% for g in goals %}
   <tr>
-    <td>#{{ g.id }}</td>
+    <td><a href="/goals/{{ g.id }}">#{{ g.id }}</a></td>
     <td>{{ g.firm_id }}</td>
     <td>{{ cases_by_ref.get(g.case_ref, {}).get('case_number', g.case_ref) }}</td>
     <td>{{ g.agent_name }}</td>
     <td>{{ g.horizon.value }}</td>
     <td><span class="status {{ g.status.value }}">{{ g.status.value }}</span></td>
     <td>{{ g.runs | length }}</td>
-    <td>{{ g.brief[:80] }}</td>
+    <td class="brief" title="{{ g.brief }}">{{ g.brief }}</td>
   </tr>
   {% endfor %}
 </table>
@@ -62,7 +62,7 @@
     <td><span class="status {{ r.status.value }}">{{ r.status.value }}</span></td>
     <td>{{ r.attempt }}</td>
     <td>{{ r.next_run_at.strftime('%Y-%m-%d %H:%M') if r.next_run_at else '—' }}</td>
-    <td>{{ r.goal[:60] }}</td>
+    <td class="brief" title="{{ r.goal }}">{{ r.goal }}</td>
   </tr>
   {% endfor %}
 </table>

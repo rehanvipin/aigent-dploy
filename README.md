@@ -5,7 +5,7 @@ Aigent-Dploy is a local proof-of-concept for a platform that helps deploy AI age
 ## Quick start
 
 ```bash
-export MISTRAL_API_KEY=...                     # required for the LLM agent + voice TTS/STT. skip if just looking at web app
+export MISTRAL_API_KEY=...  # required for the LLM agent + voice TTS/STT. skip if just looking at web app
 uv run python scripts/seed.py
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
@@ -24,3 +24,6 @@ Screenshot of home page:
 
 Screenshot of a particular goal:
 ![alt text](image-1.png)
+
+Screenshot of escalation:
+![alt text](image.png)

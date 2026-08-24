@@ -10,7 +10,7 @@
     <td>{{ t.case.case_number }} ({{ t.case.client_name }})</td>
     <td>{{ t.case.firm.name }}</td>
     <td><span class="status {{ 'done' if t.status == 'done' else 'waiting' }}">{{ t.status }}</span></td>
-    <td><pre style="margin:0">{{ t.notes }}</pre></td>
+    <td><pre>{{ t.notes }}</pre></td>
   </tr>
   {% endfor %}
 </table>

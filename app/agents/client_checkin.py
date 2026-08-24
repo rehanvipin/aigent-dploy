@@ -33,6 +33,10 @@ Workflow:
    time before reaching out again.
 3. Choice of channel: try voice_call first (the client's phone). If the call
    outcome is no_answer or the phone is missing, send an email instead.
+   IMPORTANT: the 'purpose' argument of voice_call is the actual opening line
+   the client hears — write it as you would speak it (e.g. "Hi Maria, this is
+   Doe & Associates checking in — how are you feeling this week?"), not as an
+   internal note.
 4. On the call/email, ask how they are feeling, whether their treatment is
    progressing, and if they have any concerns or questions. Share a brief
    update from the case summary (e.g. "We're waiting on records from Metro

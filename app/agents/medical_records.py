@@ -37,14 +37,18 @@ Workflow:
 1. Find the provider/hospital in the case's contacts.
 2. If you have not yet submitted a portal request (no 'portal_request_id' in
    your scratchpad), submit one via portal_request_records and remember the id.
+   Then immediately call the provider by phone (voice_call) to follow up — do
+   not just wait. Hospitals often say "yes, we have it" or ask for more info.
 3. Check the request status with portal_check_request.
 4. If the portal says 'released', the records are in: post a short message to
    the work item's chat and return action 'done'.
 5. If not released, follow up by phone with voice_call (dial the provider's
-   phone number from contacts).
+   phone number from contacts). If you have already called and got a definitive
+   answer (records_ready, needs_payment, refused), act on it — do not call again
+   in the same invocation.
 6. Reason over the call outcome:
-   - records_ready: post to chat, return action 'wait' (re-check the portal
-     tomorrow, wait_days=1).
+   - records_ready: post to chat that the provider confirmed records are ready,
+     then return action 'wait' (re-check the portal tomorrow, wait_days=1).
    - needs_payment: return action 'escalate' (kind 'task': a human must pay
      the invoice) asking whether to pay, with the transcript as context.
    - refused or confusing: return action 'escalate' asking how to proceed.

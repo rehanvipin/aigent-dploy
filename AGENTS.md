@@ -122,5 +122,12 @@ and not step on rakes.
   and scheduling, persistence, audit, and escalation plumbing belong to the
   platform — don't let them leak into `app/agents/`.
 - Scenario scripts in `scripts/seed.py` are keyed by provider phone
-  (`provider:+1-...`, `portal:+1-...`); each check/call advances the script
-  one step and sticks on the last entry.
+  (`provider:+1-...`, `portal:+1-...`). With `MISTRAL_API_KEY` set, the
+  voice/email stubs **improvise the reply live** instead of replaying the
+  script: `app/stubs/comms_api.py::_live_improvise` feeds Mistral the actual
+  CMS case (`case_ref` → client, injury, status, contacts — the per-client,
+  per-case static starting point), the seeded script (how that person talks),
+  and the recent communications archive (continuity). Without the key it
+  falls back to advancing the static script (one step per check/call, sticks
+  on the last entry). The portal stub similarly asks Mistral for the next
+  status, falling back to the `portal:+1-...` script.

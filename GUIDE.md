@@ -30,10 +30,10 @@ Two structural ideas sit on top of that:
 
 ```mermaid
 flowchart LR
-    subgraph Stubs["Stub services (stand-ins for the real world)"]
+      subgraph Stubs["Stub services (stand-ins for the real world)"]
         CMS["Stub CMS\n(Filevine-like)\nfirms / cases / tasks / chat"]
-        COMMS["Stub comms\nvoice / email / fax\n(scripted outcomes)\n+ inbound email"]
-        PORTAL["Stub portal\nprovider records portal\n(browser-automation path)"]
+        COMMS["Stub comms\nvoice / email / fax\nimprovised replies\n(fallback: static script)\n+ inbound email"]
+        PORTAL["Stub portal\nprovider records portal\nimprovised statuses\n(fallback: static script)"]
     end
 
     subgraph Platform["Platform core"]
@@ -102,19 +102,19 @@ app/
     tools.py               Toolset: everything an agent can do (audited + archive + speech)
     db.py                  SQLAlchemy engine/session for the platform DB
     api.py                 /api/* : webhooks, goals, runs, escalations, memory, configs
-    dashboard.py           / and /runs/{id} admin HTML views
+    dashboard.py           / , /goals/{id} , /runs/{id} admin HTML views
   stubs/                   <-- stand-ins for external systems
     cms_models.py          stub CMS data model (Firm, Case, Task, Contact, chat)
     cms_api.py             stub CMS REST API + task-board UI
-    comms_api.py           voice / email / fax (scripted) + inbound-email endpoint
-    portal_api.py          provider records portal (scripted releases)
+    comms_api.py           voice / email / fax (improvised, script fallback) + inbound-email endpoint
+    portal_api.py          provider records portal (improvised statuses, script fallback)
 skills/                    <-- skill library (Markdown knowledge, not code)
   metro-general-portal/SKILL.md
   stub-cms-basics/SKILL.md
   trauma-records-request/SKILL.md
   firms/doe-and-associates/org-chart/SKILL.md
 scripts/
-  seed.py                  seeds firm, platform_firm, 2 agent_configs, 2 triggers, stub scenarios
+  seed.py                  seeds firm, platform_firm, 2 agent_configs, 2 triggers, stub scenarios — and EXECUTES 3 representative runs
   mistral_smoke.py         sanity-checks chat / structured output / TTS / STT
 ```
 
@@ -506,8 +506,10 @@ automatically (firm scoping + audit, no tool path that bypasses it).
   `platform_firms.connector_key`); comms/portal tools are thin `httpx` calls to
   the stub URLs (`config.py` holds the URLs).
 - `voice_call` is a real speech round-trip: it synthesizes the agent's line
-  (TTS), gets the stub's scripted reply, synthesizes *that* in the other party's
-  voice (TTS), and transcribes it back (STT).
+  (TTS), gets the stub's **improvised** reply, synthesizes *that* in the other
+  party's voice (TTS), and transcribes it back (STT).
+- Outcomes/structured data are the same shapes whether the stub improvised or
+  replayed the script.
 - Each outbound comms call writes a `RunEvent` (`tool_call`) AND a
   `Communication` row (the archive), and mints a `conversation_key` with an
   instance trigger so inbound replies route back.
@@ -518,16 +520,25 @@ automatically (firm scoping + audit, no tool path that bypasses it).
   schemas in `llm.py::TOOL_SPECS` expose only domain args, and the dispatcher
   injects the rest.
 
-**The guardrail** (`guardrail.py`): if the firm's `agent_config.guardrail_focus`
-is non-empty, every outward/mutating tool call is reviewed by an adversarial
-LLM call (same model, adversarial prompt + focus + the same context the agent
-saw + the tool's argument schema) *before* it executes. The verdict is `allow`
-or `block`; a block feeds back into the agent loop as the tool result
+**The guardrail** (`guardrail.py`): this feature exists per-config, but it is
+**toggled off by default**. `settings.guardrail_enabled` (env
+`GUARDRAIL_ENABLED=true`) gates the review loop in `llm.py`. Per config, a
+non-empty `guardrail_focus` *catalogues* the focus/tool overrides:
+
+- **enabled + focus set** → every outward/mutating tool call is reviewed by an
+  adversarial LLM pass (`llm.py` picks the reviewed-tool set from
+  `gr.reviewed_tools(focus, override)`).
+- **enabled but no focus** → no review (the reviewer is opt-in per config).
+- **disabled** → the feature gate short-circuits, no review calls happen.
+
+Review happens *before* the tool executes, with an adversarial prompt + focus
++ the same context the agent saw + the tool's argument schema. The verdict is
+`allow` or `block`; a block becomes the tool result
 (`{"blocked": true, "reason": ...}`) so the agent can revise or escalate. The
-guardrail *constrains* judgment, never replaces it. Verdicts land in the audit
-trail (`kind="guardrail"`). It **fails open** on a reviewer outage (audited as
-`guardrail UNAVAILABLE ... executed unreviewed`) so a Mistral 429 never stalls
-a run; the chat loop also retries on 429 with backoff.
+guardrail *constrains* judgment, never replaces it. Verdicts land in the
+audit trail (`kind="guardrail"`). It **fails open** on a reviewer outage
+(audited as `guardrail UNAVAILABLE ... executed unreviewed`) so a Mistral 429
+never stalls a run; the chat loop also retries on 429 with backoff.
 
 **Known limitation:** the reviewer sees the snapshot context + proposed action
 but NOT other in-step tool results, so it can contradict a status the agent just
@@ -539,19 +550,55 @@ same reason.
 The stub comms also log every call to the raw `stub_log` table, inspectable
 via `/api/stub-log`.
 
+### Improvised stubs (how the outside world answers)
+
+The agent's `voice_call`/`send_email` posts `scenario`, `to`, `script_prompt`
+(purpose/opening line), and `case_ref` to the comms stub. With a Mistral API
+key the stub **improvises the reply live**; without, it advances the seeded
+static script one step (sticking on the last entry). `_live_improvise` feeds
+Mistral three sources:
+
+- The **actual CMS case** (lookup by `case_ref` → client, injury summary,
+  case status, all contacts).
+- The **called/emailed party** on that case — `_counterparty_descriptor`
+  matches phone/email against case contacts so the generator knows whether it
+  plays the *client* or a *provider*, and which one.
+- The **seeded persona script** (`_peek_scenario`, name → script lines) as
+  reference voice, plus the **recent communications archive**
+  (`_recent_comms_context`) for continuity across check-ins.
+
+The prompt asks for 1–3 sentences, outcome among `answered|records_ready|
+needs_payment|needs_fax|refused|no_answer|voicemail`, raw JSON
+(`_parse_llm_json` strips ```json fences). The portal stub does the same for
+status replies (`portal_api.py::_live_portal_status`), falling back to a
+helper that strips fenced JSON. Everything is audited to `stub_log` via the
+platform tools, exactly as for script replays.
+
 ---
 
 ## 10. Request flow across the process
 
 All routers are mounted on one FastAPI app (`main.py`):
 
-| Prefix             | Module                      | Purpose                                   |
-|--------------------|-----------------------------|-------------------------------------------|
-| `/api/*`           | `platform/api.py`           | webhooks, goals, runs, escalations, memory, configs, triggers |
-| `/` , `/runs/{id}` | `platform/dashboard.py`     | admin HTML dashboard                      |
-| `/cms/*`           | `stubs/cms_api.py`          | stub CMS API + `/cms/board` task board    |
-| `/stubs/voice` …   | `stubs/comms_api.py`        | voice/email/fax stubs + `/stubs/email/inbound` |
-| `/stubs/portal/*`  | `stubs/portal_api.py`       | provider records portal stub              |
+| Prefix                        | Module                       | Purpose                                                                |
+|-------------------------------|------------------------------|------------------------------------------------------------------------|
+| `/api/*`                      | `platform/api.py`            | webhooks, goals, runs, escalations, memory, configs, triggers          |
+| `/`, `/goals/{id}`, `/runs/{id}` | `platform/dashboard.py`   | admin HTML dashboard (goals + runs detail pages)                       |
+| `/cms/*`                      | `stubs/cms_api.py`           | stub CMS API + `/cms/board` task board                                 |
+| `/stubs/voice` …              | `stubs/comms_api.py`         | voice/email/fax stubs + `/stubs/email/inbound`                          |
+| `/stubs/portal/*`             | `stubs/portal_api.py`        | provider records portal stub                                           |
+
+Dashboard page details:
+
+- **Goals table** id links to `/goals/{id}` — a page with the **full brief**,
+  the case metadata resolved via the CMS, and a table of all its runs (each
+  linking to its own run detail).
+- **Runs table** id links to `/runs/{id}` — the audit trail, comms on the run,
+  and escalations.
+- **Overflow-safe tables/pre blocks:** tables use `table-layout: fixed`; long
+  briefs in Goals/Runs have `<td class="brief">` with ellipsis truncation and a
+  full-text tooltip; `<pre>` inside table cells wraps (`td pre` rule); the
+  escalation card on the home screen wraps `pre` content too.
 
 Note `main.py` also defines tiny `/ui/...` form handlers so the HTML pages
 work without JavaScript — including `/ui/simulate-inbound-email` (the demo
@@ -562,20 +609,37 @@ affordance for the outside-world email path).
 ## 11. Running it
 
 ```bash
-export MISTRAL_API_KEY=...           # required: drives the LLM agent, guardrail, and voice TTS/STT
+export MISTRAL_API_KEY=...           # required: LLM agent + improvised stubs + TTS/STT
+export GUARDRAIL_ENABLED=true        # optional: turn on the per-config guardrail review
 uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
-uv run python scripts/seed.py        # idempotent; seeds firm + platform_firm + 2 agent_configs + 2 triggers + skills + scenarios
+uv run python scripts/seed.py        # idempotent; also EXECUTES 3 representative runs (with a 15s spacing)
 uv run python scripts/mistral_smoke.py   # sanity-check chat / structured output / TTS / STT
 ```
+
+`scripts/seed.py` does more than seed: it builds the demo data end to end via
+the platform runtime —
+
+1. Seeds CMS firms/cases/tasks/contacts/chat and stub scenarios
+   (`provider:+1-555-...` scripts).
+2. Opens goals and runs through `runtime.open_goal` (never raw INSERTs — runs
+   must look like webhook-run records).
+3. Executes the three representative runs (`EXECUTE_NOW`: Metro General
+   records, Maria Santos check-in, Elena Petrov check-in) with a 15s spacing
+   against 429s, so the dashboard has real data immediately. All other runs
+   stay `PENDING` at `next_run_at +30d` for the scheduler.
+4. Prints a full summary (firms, cases, goals, runs, events, comms,
+   escalations) plus the demo paths.
+
+Without `MISTRAL_API_KEY`, goal opening still happens but no runs execute.
 
 Then open `/` (dashboard) and `/cms/board` (CMS task board). Tag
 `@records-agent` in a task chat. The seeded platform setup:
 
-- **`@records-agent`** (config #1): guardrail on (catches overclaims, wrong
-  recipients, invented facts), 4 skills attached (`metro-general-portal`,
+- **`@records-agent`** (config #1): guardrail focus set (catalogued; active only
+  when `GUARDRAIL_ENABLED=true`), 4 skills attached (`metro-general-portal`,
   `stub-cms-basics`, `trauma-records-request`, firm org-chart).
-- **`@checkin-agent`** (config #2): guardrail on (client-facing, never promise
-  settlements), org-chart + cms-basics skills, 14-day cadence.
+- **`@checkin-agent`** (config #2): guardrail focus set (client-facing; active
+  only when toggled on), org-chart + cms-basics skills, 14-day cadence.
 
 The three demo tasks:
 
