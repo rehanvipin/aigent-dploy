@@ -15,6 +15,8 @@ import asyncio
 import logging
 import sqlite3
 from contextlib import asynccontextmanager
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from fastapi import FastAPI, Form
 from fastapi.responses import RedirectResponse
@@ -24,7 +26,25 @@ from app.platform.db import Base, engine
 from app.platform.runtime import scheduler_tick
 from app.stubs.cms_models import CmsBase
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+# Logs live in project_root/logs/ so they persist across restarts and are easy
+# to find when debugging.
+LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+LOG_FILE = LOG_DIR / "app.log"
+
+_root = logging.getLogger()
+_root.setLevel(logging.INFO)
+_root.handlers.clear()
+_fmt = logging.Formatter("%(asctime)s %(name)s %(levelname)s %(message)s")
+
+_console = logging.StreamHandler()
+_console.setFormatter(_fmt)
+_root.addHandler(_console)
+
+_file = RotatingFileHandler(LOG_FILE, maxBytes=2 * 1024 * 1024, backupCount=3, encoding="utf-8")
+_file.setFormatter(_fmt)
+_root.addHandler(_file)
+
 log = logging.getLogger("app")
 
 STUB_DDL = """

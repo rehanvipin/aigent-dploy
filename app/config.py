@@ -13,6 +13,10 @@ class Settings(BaseSettings):
     # Skill library (progressive disclosure: index in context, bodies on demand)
     skills_root: str = "skills"
 
+    # Guardrail: per-config guardrail_focus strings stay in the DB, but the
+    # review loop only runs when this is on. Toggle with GUARDRAIL_ENABLED=true.
+    guardrail_enabled: bool = False
+
     # Mistral (MISTRAL_API_KEY is read from the environment automatically)
     mistral_api_key: str = ""
     mistral_chat_model: str = "mistral-small-latest"

@@ -401,7 +401,7 @@ def run_llm_step(agent, ctx: RunContext) -> StepResult:
             override = json.loads(cfg.guardrail_tools_json)
         except ValueError:
             override = None
-    review_set = gr.reviewed_tools(focus, override) if focus else set()
+    review_set = gr.reviewed_tools(focus, override) if (focus and settings.guardrail_enabled) else set()
 
     client = _mistral()
     for _ in range(settings.mistral_max_tool_rounds):

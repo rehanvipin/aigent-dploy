@@ -18,6 +18,8 @@ and not step on rakes.
 - Single SQLite file (`aigent-dploy.db`) shared by platform tables, stub CMS
   tables, and stub scenario/log tables (raw-SQLite tables, created by
   `app.main.STUB_DDL`, not SQLAlchemy).
+- Logs write to both stdout and `logs/app.log` (rotating, 2 MB × 3 files). The
+  `logs/` folder is created on startup and is git-ignored.
 - The LLM agent and voice path need `MISTRAL_API_KEY` in the environment.
   Without it, runs fail with a clear `MistralError` (no silent fallback).
   The guardrail reviewer adds a second Mistral chat call per outward action,

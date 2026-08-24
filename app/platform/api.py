@@ -171,7 +171,7 @@ def list_agent_configs(firm_id: int | None = None, db: Session = Depends(get_db)
         {
             "id": c.id, "firm_id": c.firm_id, "agent_name": c.agent_name,
             "handle": c.handle, "skills": c.skills(),
-            "guardrail_enabled": bool(c.guardrail_focus),
+            "guardrail_enabled": bool(c.guardrail_focus) and settings.guardrail_enabled,
             "cadence_days": c.cadence_days, "enabled": c.enabled,
         }
         for c in cfgs
